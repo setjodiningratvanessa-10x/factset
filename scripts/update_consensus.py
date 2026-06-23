@@ -95,43 +95,64 @@ def get_factset_token() -> str:
 
 # ── FactSet Estimates ─────────────────────────────────────────────────────────
 
-def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: str, freq: str) -> float | str:
-    # FQL syntax: keywords unquoted, strings in single quotes
-    formula = f"FE_ESTIMATE({fds_code},MEAN,{freq},'{period}','{as_of_date}')"
+def build_formulas(as_of_date: str) -> tuple[list[str], list[str]]:
+    """Build all FQL formulas and matching keys for a single batch request."""
+    formulas = []
+    keys = []
+    codes = [row[1] for row in DATA_ROWS if row[1] is not None]
+    for code in dict.fromkeys(codes):  # deduplicate, preserve order
+        for period in QTR_PERIODS:
+            formulas.append(f"FE_ESTIMATE({code},MEAN,QTR_ROLL,'{period}','{as_of_date}')")
+            keys.append(f"{code}__{period}")
+        for period in ANN_PERIODS:
+            formulas.append(f"FE_ESTIMATE({code},MEAN,ANN,'{period}','{as_of_date}')")
+            keys.append(f"{code}__{period}")
+    return formulas, keys
+
+
+def batch_fetch(access_token: str, as_of_date: str, label: str) -> dict:
+    """Fetch all estimates in a single API call."""
+    formulas, keys = build_formulas(as_of_date)
     resp = requests.post(
         FACTSET_FORMULA_URL,
-        json={"data": {"ids": [TICKER], "formulas": [formula]}},
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        },
-        timeout=30,
+        json={"data": {"ids": [TICKER], "formulas": formulas}},
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        timeout=60,
     )
     if resp.status_code != 200:
-        print(f"WARN {fds_code}/{period} HTTP {resp.status_code}: {resp.text[:300]}", flush=True)
-        return "na"
+        print(f"WARN {label} HTTP {resp.status_code}: {resp.text[:300]}", flush=True)
+        return {}
     try:
-        body = resp.json()
-        value = body["data"][0]["result"][0]
-        return round(float(value), 3) if value is not None else "na"
-    except (KeyError, IndexError, TypeError, ValueError) as e:
-        print(f"WARN parse error {fds_code}/{period}: {e} | {str(body)[:300]}", flush=True)
-        return "na"
+        results = resp.json()["data"][0]["result"]
+        out = {}
+        for key, value in zip(keys, results):
+            try:
+                out[key] = round(float(value), 3) if value is not None else "na"
+            except (TypeError, ValueError):
+                out[key] = "na"
+        print(f"{label}: fetched {sum(1 for v in out.values() if v != 'na')} non-null values out of {len(out)}", flush=True)
+        return out
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"WARN {label} parse error: {e} | {resp.text[:300]}", flush=True)
+        return {}
 
 
 def fetch_all_estimates(access_token: str, as_of_date: str, prior_date: str) -> dict:
-    codes = {row[1] for row in DATA_ROWS if row[1] is not None}
-    estimates = {}
+    """Fetch current and prior week estimates in 2 batched API calls."""
+    curr = batch_fetch(access_token, as_of_date, "current_week")
+    prior = batch_fetch(access_token, prior_date, "prior_week")
 
+    # Restructure into {code: {curr_period: value, prior_period: value}}
+    codes = list(dict.fromkeys(row[1] for row in DATA_ROWS if row[1] is not None))
+    estimates = {}
     for code in codes:
         estimates[code] = {}
         for period in QTR_PERIODS:
-            estimates[code][f"curr_{period}"] = fetch_estimate(access_token, code, period, as_of_date, "QTR_ROLL")
-            estimates[code][f"prior_{period}"] = fetch_estimate(access_token, code, period, prior_date, "QTR_ROLL")
+            estimates[code][f"curr_{period}"] = curr.get(f"{code}__{period}", "na")
+            estimates[code][f"prior_{period}"] = prior.get(f"{code}__{period}", "na")
         for period in ANN_PERIODS:
-            estimates[code][f"curr_{period}"] = fetch_estimate(access_token, code, str(period), as_of_date, "ANN")
-            estimates[code][f"prior_{period}"] = fetch_estimate(access_token, code, str(period), prior_date, "ANN")
-
+            estimates[code][f"curr_{period}"] = curr.get(f"{code}__{period}", "na")
+            estimates[code][f"prior_{period}"] = prior.get(f"{code}__{period}", "na")
     return estimates
 
 
