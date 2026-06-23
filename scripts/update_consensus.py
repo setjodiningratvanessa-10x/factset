@@ -1,6 +1,7 @@
 """
 Weekly FactSet Consensus updater for TXG.
-Fetches consensus estimates from FactSet API and writes to Google Sheets.
+Fetches consensus estimates from FactSet API and writes to Google Sheets
+via a Google Apps Script web endpoint (no Google Cloud account needed).
 """
 
 import json
@@ -8,50 +9,50 @@ import os
 import time
 import datetime
 import requests
-import gspread
-from google.oauth2.service_account import Credentials
 from jose import jwt as jose_jwt
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
 TICKER = "TXG"
-SPREADSHEET_ID = "1svUgGTr8DVUGIV3vwKO8EMJTPGklmnz19eUdJp_HTJA"
 SHEET_NAME = "Weekly Consensus"
 
 FACTSET_TOKEN_URL = "https://auth.factset.com/as/token.oauth2"
 FACTSET_FORMULA_URL = "https://api.factset.com/formula-api/v1/cross-sectional"
 
-# Quarters and annual periods to fetch
 QTR_PERIODS = ["2026/1F", "2026/2F", "2026/3F", "2026/4F"]
 ANN_PERIODS = [2026, 2027]
 
-# Rows: (label, fds_code, is_product_line)
-# fds_code None means it's a calculated row (formula in sheet)
-METRICS = [
-    # Product segment estimates
-    ("Instrument Revenue", None, False),           # section header
-    ("Chromium",          "PRODLINE_SALES_4", True),
-    ("Spatial",           "PRODLINE_SALES_5", True),
-    ("Visium",            None,               True),   # always na
-    ("Xenium",            None,               True),   # always na
-    ("Instrument Revenue","PRODLINE_SALES_1", True),
-    ("Consumables Revenue", None, False),          # section header
-    ("Chromium",          "PRODLINE_SALES_6", True),
-    ("Spatial",           "PRODLINE_SALES_7", True),
-    ("Visium",            None,               True),
-    ("Xenium",            None,               True),
-    ("Consumables Revenue","PRODLINE_SALES_2", True),
-    ("Services Revenue",  "PRODLINE_SALES_3", True),
-    ("Total Revenue",     "SALES",            True),
-    # P&L
-    ("COGS",              "COS",              False),
-    ("Gross Profit",      "GROSS_INC",        False),
-    ("Gross Margin %",    None,               False),  # calculated
-    ("R&D",               "RD_EXP",           False),
-    ("SG&A",              "SGA",              False),
-    ("Total Opex",        None,               False),  # calculated
-    ("EBIT",              "EBIT",             False),
-    ("Net Income",        "NET_INC",          False),
+# (display label, FDS estimate code)
+# None code = calculated or always "na"
+DATA_ROWS = [
+    # Instrument Revenue section
+    ("Instrument Revenue",        None),               # section header
+    ("  Chromium",                "PRODLINE_SALES_4"),
+    ("  Spatial",                 "PRODLINE_SALES_5"),
+    ("  Visium",                  None),
+    ("  Xenium",                  None),
+    ("Instrument Revenue (Total)","PRODLINE_SALES_1"),
+    # Consumables Revenue section
+    ("Consumables Revenue",       None),               # section header
+    ("  Chromium",                "PRODLINE_SALES_6"),
+    ("  Spatial",                 "PRODLINE_SALES_7"),
+    ("  Visium",                  None),
+    ("  Xenium",                  None),
+    ("Consumables Revenue (Total)","PRODLINE_SALES_2"),
+    ("Services Revenue",          "PRODLINE_SALES_3"),
+    ("Total Revenue",             "SALES"),
+    # P&L section
+    (None, None),                                      # blank separator
+    ("COGS",                      "COS"),
+    ("Gross Profit",              "GROSS_INC"),
+    ("Gross Margin %",            None),               # calculated
+    (None, None),
+    ("R&D",                       "RD_EXP"),
+    ("SG&A",                      "SGA"),
+    ("Total Opex",                None),               # calculated
+    ("EBIT",                      "EBIT"),
+    (None, None),
+    ("Net Income",                "NET_INC"),
 ]
 
 
@@ -70,9 +71,12 @@ def get_factset_token() -> str:
         "exp": now + 300,
         "jti": f"{client_id}-{now}",
     }
-    headers = {"kid": jwk["kid"]}
-    private_key = {k: v for k, v in jwk.items() if k != "use"}
-    token = jose_jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
+    token = jose_jwt.encode(
+        payload,
+        {k: v for k, v in jwk.items()},
+        algorithm="RS256",
+        headers={"kid": jwk["kid"]},
+    )
 
     resp = requests.post(
         FACTSET_TOKEN_URL,
@@ -89,20 +93,13 @@ def get_factset_token() -> str:
     return resp.json()["access_token"]
 
 
-# ── FactSet Formula API ───────────────────────────────────────────────────────
+# ── FactSet Estimates ─────────────────────────────────────────────────────────
 
-def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: str, freq: str = "QTR_ROLL") -> float | str:
-    """Call FE_ESTIMATE via the FactSet Formula API."""
+def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: str, freq: str) -> float | str:
     formula = f'FE_ESTIMATE("{fds_code}","MEAN","{freq}","{period}","{as_of_date}")'
-    payload = {
-        "data": {
-            "ids": [TICKER],
-            "formulas": [formula],
-        }
-    }
     resp = requests.post(
         FACTSET_FORMULA_URL,
-        json=payload,
+        json={"data": {"ids": [TICKER], "formulas": [formula]}},
         headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
@@ -112,224 +109,160 @@ def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: st
     if resp.status_code != 200:
         return "na"
     try:
-        result = resp.json()
-        value = result["data"][0]["result"][0]
+        value = resp.json()["data"][0]["result"][0]
         return round(float(value), 3) if value is not None else "na"
     except (KeyError, IndexError, TypeError, ValueError):
         return "na"
 
 
-def fetch_all_estimates(access_token: str, as_of_date: str) -> dict:
-    """Fetch all estimates for current week and prior week."""
-    prior_date = (datetime.datetime.strptime(as_of_date, "%Y-%m-%d") - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
-
-    results = {}
-    codes = {m[1] for m in METRICS if m[1] and m[1] not in (None,)}
+def fetch_all_estimates(access_token: str, as_of_date: str, prior_date: str) -> dict:
+    codes = {row[1] for row in DATA_ROWS if row[1] is not None}
+    estimates = {}
 
     for code in codes:
-        results[code] = {}
+        estimates[code] = {}
         for period in QTR_PERIODS:
-            for date_key, date_val in [("current", as_of_date), ("prior", prior_date)]:
-                val = fetch_estimate(access_token, code, period, date_val, "QTR_ROLL")
-                results[code][f"{date_key}_{period}"] = val
+            estimates[code][f"curr_{period}"] = fetch_estimate(access_token, code, period, as_of_date, "QTR_ROLL")
+            estimates[code][f"prior_{period}"] = fetch_estimate(access_token, code, period, prior_date, "QTR_ROLL")
         for period in ANN_PERIODS:
-            for date_key, date_val in [("current", as_of_date), ("prior", prior_date)]:
-                val = fetch_estimate(access_token, code, str(period), date_val, "ANN")
-                results[code][f"{date_key}_{period}"] = val
+            estimates[code][f"curr_{period}"] = fetch_estimate(access_token, code, str(period), as_of_date, "ANN")
+            estimates[code][f"prior_{period}"] = fetch_estimate(access_token, code, str(period), prior_date, "ANN")
 
-    return results, prior_date
+    return estimates
 
 
-# ── Google Sheets ─────────────────────────────────────────────────────────────
+# ── Sheet Data Builder ────────────────────────────────────────────────────────
 
-def get_sheet():
-    creds_json = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"])
-    creds = Credentials.from_service_account_info(
-        creds_json,
-        scopes=["https://www.googleapis.com/auth/spreadsheets"],
+def get_vals(estimates: dict, code: str | None, prefix: str) -> list:
+    if code is None:
+        return ["na"] * 6
+    row = estimates.get(code, {})
+    return (
+        [row.get(f"{prefix}_{p}", "na") for p in QTR_PERIODS] +
+        [row.get(f"{prefix}_{p}", "na") for p in ANN_PERIODS]
     )
-    gc = gspread.authorize(creds)
-    spreadsheet = gc.open_by_key(SPREADSHEET_ID)
-    try:
-        ws = spreadsheet.worksheet(SHEET_NAME)
-    except gspread.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=SHEET_NAME, rows=50, cols=30)
-    return ws
 
 
-def build_sheet_data(as_of_date: str, prior_date: str, estimates: dict) -> list[list]:
-    """Build the 2D array to write to the sheet."""
-    def v(code, period_key):
-        if code is None:
-            return "na"
-        return estimates.get(code, {}).get(period_key, "na")
-
-    def diff(code, period_key_curr, period_key_prior):
-        curr = v(code, period_key_curr)
-        prior = v(code, period_key_prior)
-        if curr == "na" or prior == "na":
-            return "na"
+def calc_diff(curr: list, prior: list) -> list:
+    result = []
+    for c, p in zip(curr, prior):
         try:
-            return round(float(curr) - float(prior), 3)
+            result.append(round(float(c) - float(p), 3))
         except (TypeError, ValueError):
-            return "na"
+            result.append("na")
+    return result
 
+
+def build_sheet_rows(as_of_date: str, prior_date: str, estimates: dict) -> list[list]:
     qtr_labels = ["2026 Q1", "2026 Q2", "2026 Q3", "2026 Q4", "FY 2026", "FY 2027"]
-    all_periods_curr = [f"current_{p}" for p in QTR_PERIODS] + [f"current_{p}" for p in ANN_PERIODS]
-    all_periods_prior = [f"prior_{p}" for p in QTR_PERIODS] + [f"prior_{p}" for p in ANN_PERIODS]
 
-    rows = []
-    rows.append(["Weekly FactSet Consensus"] + [""] * 20)
-    rows.append([""] * 21)
-    rows.append([""] * 21)
-    rows.append([""] * 21)
-
-    # Row 5: dates
-    rows.append(["", "Date", "", as_of_date, "", "", "", "", "", prior_date] + [""] * 11)
-
-    # Row 6: ticker
-    rows.append(["", "Ticker", "", TICKER] + [""] * 17)
-
-    # Row 7: timing headers
-    rows.append(["", "Timing", ""] + QTR_PERIODS + [str(p) for p in ANN_PERIODS] +
-                [""] + QTR_PERIODS + [str(p) for p in ANN_PERIODS] + [""] * 3)
-
-    rows.append([""] * 21)
-
-    # Header row
-    rows.append(["", "", "", "FactSet Consensus"] + [""] * 8 + [""] +
-                ["Change since Last Week"] + [""] * 8)
-
-    rows.append(["", "", "",
-                 f"As of {as_of_date}"] + [""] * 5 +
-                [""] +
-                [f"As of {prior_date}"] + [""] * 11)
-
-    # Column headers
-    rows.append(["", "", ""] + qtr_labels + [""] + qtr_labels + [""] * 3)
-
-    # Data rows
-    metric_map = {
-        "Instrument Revenue (header)": None,
-        "Chromium (instr)": "PRODLINE_SALES_4",
-        "Spatial (instr)": "PRODLINE_SALES_5",
-        "Visium": None,
-        "Xenium": None,
-        "Instrument Revenue": "PRODLINE_SALES_1",
-        "Consumables Revenue (header)": None,
-        "Chromium (cons)": "PRODLINE_SALES_6",
-        "Spatial (cons)": "PRODLINE_SALES_7",
-        "Consumables Revenue": "PRODLINE_SALES_2",
-        "Services Revenue": "PRODLINE_SALES_3",
-        "Total Revenue": "SALES",
-    }
-
-    data_rows = [
-        ("Instrument Revenue", None),
-        ("  Chromium", "PRODLINE_SALES_4"),
-        ("  Spatial", "PRODLINE_SALES_5"),
-        ("  Visium", None),
-        ("  Xenium", None),
-        ("Instrument Revenue (Total)", "PRODLINE_SALES_1"),
-        ("Consumables Revenue", None),
-        ("  Chromium", "PRODLINE_SALES_6"),
-        ("  Spatial", "PRODLINE_SALES_7"),
-        ("  Visium", None),
-        ("  Xenium", None),
-        ("Consumables Revenue (Total)", "PRODLINE_SALES_2"),
-        ("Services Revenue", "PRODLINE_SALES_3"),
-        ("Total Revenue", "SALES"),
-        ["SEPARATOR"],
-        ("COGS", "COS"),
-        ("Gross Profit", "GROSS_INC"),
-        ("Gross Margin %", None),  # calculated below
-        ["SEPARATOR"],
-        ("R&D", "RD_EXP"),
-        ("SG&A", "SGA"),
-        ("Total Opex", None),      # calculated below
-        ("EBIT", "EBIT"),
-        ["SEPARATOR"],
-        ("Net Income", "NET_INC"),
+    rows = [
+        ["Weekly FactSet Consensus"] + [""] * 21,
+        [""] * 22,
+        [""] * 22,
+        [""] * 22,
+        # Row 5: dates
+        ["", "Date", "", as_of_date, "", "", "", "", "", prior_date] + [""] * 12,
+        # Row 6: ticker
+        ["", "Ticker for FactSet Formulas", "", TICKER] + [""] * 18,
+        # Row 7: timing periods
+        ["", "Timing for FactSet Formulas", ""] +
+        QTR_PERIODS + [str(p) for p in ANN_PERIODS] + [""] +
+        QTR_PERIODS + [str(p) for p in ANN_PERIODS] + [""] * 3,
+        [""] * 22,
+        # Section headers
+        ["", "", "", "FactSet Consensus"] + [""] * 7 + ["", "Change since Last Week"] + [""] * 10,
+        ["", "", "", f"As of {as_of_date}"] + [""] * 5 + ["", f"As of {prior_date}"] + [""] * 12,
+        # Column labels
+        ["", "", ""] + qtr_labels + [""] + qtr_labels + [""] + qtr_labels,
     ]
 
-    rev_curr = None
-    gp_curr = None
+    saved = {}
 
-    for item in data_rows:
-        if item == ["SEPARATOR"]:
-            rows.append([""] * 21)
+    for label, code in DATA_ROWS:
+        if label is None:
+            rows.append([""] * 22)
             continue
 
-        label, code = item
-        curr_vals = [v(code, p) for p in all_periods_curr]
-        prior_vals = [v(code, p) for p in all_periods_prior]
+        curr = get_vals(estimates, code, "curr")
+        prior = get_vals(estimates, code, "prior")
 
-        # Special calculated rows
-        if label == "Gross Margin %" and rev_curr and gp_curr:
-            curr_vals = []
-            prior_vals = []
-            for i in range(6):
+        # Calculated rows
+        if label == "Gross Margin %":
+            rev = saved.get("Total Revenue", ["na"] * 6)
+            gp = saved.get("Gross Profit", ["na"] * 6)
+            curr = []
+            for r, g in zip(rev, gp):
                 try:
-                    curr_vals.append(round(gp_curr[i] / rev_curr[i], 4) if isinstance(gp_curr[i], float) and isinstance(rev_curr[i], float) else "na")
-                except (TypeError, ZeroDivisionError):
-                    curr_vals.append("na")
-            prior_vals = ["na"] * 6
+                    curr.append(round(float(g) / float(r), 4))
+                except (TypeError, ValueError, ZeroDivisionError):
+                    curr.append("na")
+            prior = ["na"] * 6
+
         elif label == "Total Opex":
-            curr_vals = ["na"] * 6
-            prior_vals = ["na"] * 6
-
-        diff_vals = []
-        for c, p in zip(curr_vals, prior_vals):
-            if c == "na" or p == "na":
-                diff_vals.append("na")
-            else:
+            gp = saved.get("Gross Profit", ["na"] * 6)
+            ebit = saved.get("EBIT", ["na"] * 6)
+            curr = []
+            for g, e in zip(gp, ebit):
                 try:
-                    diff_vals.append(round(float(c) - float(p), 3))
+                    curr.append(round(float(g) - float(e), 3))
                 except (TypeError, ValueError):
-                    diff_vals.append("na")
+                    curr.append("na")
+            prior = ["na"] * 6
 
-        row = ["", label, ""] + curr_vals + [""] + prior_vals + [""] + diff_vals
-        rows.append(row)
+        diff = calc_diff(curr, prior)
+        saved[label.strip()] = curr
 
-        # Save for GM% calc
-        if label == "Total Revenue":
-            rev_curr = curr_vals
-        if label == "Gross Profit":
-            gp_curr = curr_vals
+        rows.append(["", label, ""] + curr + [""] + prior + [""] + diff)
 
-    rows.append([""] * 21)
-    rows.append(["", "Note: Individual product and platform consensus figures take average of figures from available analysts (not all analysts have estimates by product and platform); numbers may not tie to total revenue."] + [""] * 19)
+    rows.append([""] * 22)
+    rows.append([
+        "",
+        "Note: Individual product and platform consensus figures take average of figures from available analysts "
+        "(not all analysts have estimates by product and platform); numbers may not tie to total revenue.",
+    ] + [""] * 20)
 
-    # Pad all rows to same width
-    max_width = max(len(r) for r in rows)
-    rows = [r + [""] * (max_width - len(r)) for r in rows]
+    # Normalize all rows to the same width
+    width = max(len(r) for r in rows)
+    return [r + [""] * (width - len(r)) for r in rows]
 
-    return rows
+
+# ── Google Sheets via Apps Script ─────────────────────────────────────────────
+
+def push_to_sheet(rows: list[list], sheet_name: str):
+    web_app_url = os.environ["GOOGLE_APPS_SCRIPT_URL"]
+    secret_token = os.environ["GOOGLE_APPS_SCRIPT_TOKEN"]
+
+    resp = requests.post(
+        web_app_url,
+        params={"token": secret_token},
+        json={"sheet_name": sheet_name, "rows": rows},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    if resp.text.strip() != "OK":
+        raise RuntimeError(f"Apps Script returned: {resp.text}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    # Use the most recent Monday
     today = datetime.date.today()
-    days_since_monday = today.weekday()
-    this_monday = today - datetime.timedelta(days=days_since_monday)
+    this_monday = today - datetime.timedelta(days=today.weekday())
     as_of_date = this_monday.strftime("%Y-%m-%d")
+    prior_date = (this_monday - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
 
-    print(f"Fetching consensus as of {as_of_date} for {TICKER}...")
+    print(f"Fetching TXG consensus as of {as_of_date} (prior: {prior_date})")
 
     access_token = get_factset_token()
     print("FactSet token obtained.")
 
-    estimates, prior_date = fetch_all_estimates(access_token, as_of_date)
-    print(f"Estimates fetched. Prior week: {prior_date}")
+    estimates = fetch_all_estimates(access_token, as_of_date, prior_date)
+    print(f"Fetched estimates for {len(estimates)} metrics.")
 
-    ws = get_sheet()
-    data = build_sheet_data(as_of_date, prior_date, estimates)
-
-    ws.clear()
-    ws.update(data, value_input_option="USER_ENTERED")
-    print(f"Google Sheet updated: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}")
+    rows = build_sheet_rows(as_of_date, prior_date, estimates)
+    push_to_sheet(rows, SHEET_NAME)
+    print("Google Sheet updated successfully.")
 
 
 if __name__ == "__main__":
