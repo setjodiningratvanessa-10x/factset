@@ -13,7 +13,7 @@ from jose import jwt as jose_jwt
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-TICKER = "TXG"
+TICKER = "TXG-US"
 SHEET_NAME = "Weekly Consensus"
 
 FACTSET_TOKEN_URL = "https://auth.factset.com/as/token.oauth2"
@@ -107,11 +107,14 @@ def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: st
         timeout=30,
     )
     if resp.status_code != 200:
+        print(f"  API error {resp.status_code} for {fds_code}/{period}: {resp.text[:200]}")
         return "na"
     try:
-        value = resp.json()["data"][0]["result"][0]
+        body = resp.json()
+        value = body["data"][0]["result"][0]
         return round(float(value), 3) if value is not None else "na"
-    except (KeyError, IndexError, TypeError, ValueError):
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        print(f"  Parse error for {fds_code}/{period}: {e} | response: {str(body)[:200]}")
         return "na"
 
 
