@@ -1,0 +1,30 @@
+name: Weekly FactSet Consensus Update
+
+on:
+  schedule:
+    # Every Monday at 3:00 PM PT = 22:00 UTC (PDT, Mar-Nov) / 23:00 UTC (PST, Nov-Mar)
+    # Using 22:00 UTC to cover PDT. Adjust to 23:00 if needed in winter.
+    - cron: "0 22 * * 1"
+  workflow_dispatch:  # allows manual trigger from GitHub UI
+
+jobs:
+  update-consensus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run consensus update
+        env:
+          FACTSET_CLIENT_ID: ${{ secrets.FACTSET_CLIENT_ID }}
+          FACTSET_JWK: ${{ secrets.FACTSET_JWK }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/update_consensus.py
