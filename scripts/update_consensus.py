@@ -95,10 +95,9 @@ def get_factset_token() -> str:
 
 # ── FactSet Estimates ─────────────────────────────────────────────────────────
 
-_debug_printed = set()
-
 def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: str, freq: str) -> float | str:
-    formula = f'FE_ESTIMATE("{fds_code}","MEAN","{freq}","{period}","{as_of_date}")'
+    # FQL syntax: keywords unquoted, strings in single quotes
+    formula = f"FE_ESTIMATE({fds_code},MEAN,{freq},'{period}','{as_of_date}')"
     resp = requests.post(
         FACTSET_FORMULA_URL,
         json={"data": {"ids": [TICKER], "formulas": [formula]}},
@@ -109,18 +108,14 @@ def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: st
         timeout=30,
     )
     if resp.status_code != 200:
-        print(f"  API error {resp.status_code} for {fds_code}/{period}: {resp.text[:300]}")
+        print(f"WARN {fds_code}/{period} HTTP {resp.status_code}: {resp.text[:300]}", flush=True)
         return "na"
     try:
         body = resp.json()
-        # Print full response for first occurrence of each fds_code for debugging
-        if fds_code not in _debug_printed:
-            _debug_printed.add(fds_code)
-            print(f"  DEBUG {fds_code}/{period}: {json.dumps(body)[:400]}")
         value = body["data"][0]["result"][0]
         return round(float(value), 3) if value is not None else "na"
     except (KeyError, IndexError, TypeError, ValueError) as e:
-        print(f"  Parse error for {fds_code}/{period}: {e} | response: {str(body)[:300]}")
+        print(f"WARN parse error {fds_code}/{period}: {e} | {str(body)[:300]}", flush=True)
         return "na"
 
 
@@ -264,7 +259,17 @@ def main():
     print(f"Fetching TXG consensus as of {as_of_date} (prior: {prior_date})")
 
     access_token = get_factset_token()
-    print("FactSet token obtained.")
+    print("FactSet token obtained.", flush=True)
+
+    # Diagnostic: test one formula and print raw response
+    test_formula = f"FE_ESTIMATE(SALES,MEAN,ANN,'2026','{as_of_date}')"
+    test_resp = requests.post(
+        FACTSET_FORMULA_URL,
+        json={"data": {"ids": [TICKER], "formulas": [test_formula]}},
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        timeout=30,
+    )
+    print(f"DIAG status={test_resp.status_code} body={test_resp.text[:600]}", flush=True)
 
     estimates = fetch_all_estimates(access_token, as_of_date, prior_date)
     print(f"Fetched estimates for {len(estimates)} metrics.")
