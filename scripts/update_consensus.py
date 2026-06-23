@@ -261,18 +261,49 @@ def main():
     access_token = get_factset_token()
     print("FactSet token obtained.", flush=True)
 
-    # Diagnostic: test one formula and print raw response
-    test_formula = f"FE_ESTIMATE(SALES,MEAN,ANN,'2026','{as_of_date}')"
-    test_resp = requests.post(
-        FACTSET_FORMULA_URL,
-        json={"data": {"ids": [TICKER], "formulas": [test_formula]}},
-        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-        timeout=30,
-    )
-    print(f"DIAG status={test_resp.status_code} body={test_resp.text[:600]}", flush=True)
+    # Diagnostic: test Formula API and Estimates API to see which one works
+    import sys
+
+    # Test 1: Formula API
+    try:
+        test_formula = f"FE_ESTIMATE(SALES,MEAN,ANN,'2026','{as_of_date}')"
+        r1 = requests.post(
+            FACTSET_FORMULA_URL,
+            json={"data": {"ids": [TICKER], "formulas": [test_formula]}},
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            timeout=30,
+        )
+        sys.stderr.write(f"FORMULA_API status={r1.status_code}\n")
+        sys.stderr.write(f"FORMULA_API body={r1.text[:600]}\n")
+        sys.stderr.flush()
+    except Exception as ex:
+        sys.stderr.write(f"FORMULA_API exception: {ex}\n")
+        sys.stderr.flush()
+
+    # Test 2: Dedicated Estimates API
+    try:
+        r2 = requests.post(
+            "https://api.factset.com/content/factset-estimates/v2/consensus-estimates",
+            json={
+                "ids": [TICKER],
+                "metrics": ["SALES", "EPS"],
+                "periodicity": "ANNUAL",
+                "fiscalPeriodStart": "2026",
+                "fiscalPeriodEnd": "2027",
+                "currency": "USD",
+            },
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            timeout=30,
+        )
+        sys.stderr.write(f"ESTIMATES_API status={r2.status_code}\n")
+        sys.stderr.write(f"ESTIMATES_API body={r2.text[:600]}\n")
+        sys.stderr.flush()
+    except Exception as ex:
+        sys.stderr.write(f"ESTIMATES_API exception: {ex}\n")
+        sys.stderr.flush()
 
     estimates = fetch_all_estimates(access_token, as_of_date, prior_date)
-    print(f"Fetched estimates for {len(estimates)} metrics.")
+    print(f"Fetched estimates for {len(estimates)} metrics.", flush=True)
 
     rows = build_sheet_rows(as_of_date, prior_date, estimates)
     push_to_sheet(rows, SHEET_NAME)
