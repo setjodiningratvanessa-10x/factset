@@ -29,3 +29,6 @@ jobs:
           GOOGLE_APPS_SCRIPT_URL: ${{ secrets.GOOGLE_APPS_SCRIPT_URL }}
           GOOGLE_APPS_SCRIPT_TOKEN: ${{ secrets.GOOGLE_APPS_SCRIPT_TOKEN }}
         run: python -u scripts/update_consensus.py
+
+      - name: Show API diagnostics
+        run: cat diag_output.txt || echo "No diagnostic file found"

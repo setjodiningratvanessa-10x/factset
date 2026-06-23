@@ -261,8 +261,8 @@ def main():
     access_token = get_factset_token()
     print("FactSet token obtained.", flush=True)
 
-    # Diagnostic: test Formula API and Estimates API to see which one works
-    import sys
+    # Diagnostic: test both API endpoints and write results to file
+    diag_lines = []
 
     # Test 1: Formula API
     try:
@@ -273,12 +273,10 @@ def main():
             headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
             timeout=30,
         )
-        sys.stderr.write(f"FORMULA_API status={r1.status_code}\n")
-        sys.stderr.write(f"FORMULA_API body={r1.text[:600]}\n")
-        sys.stderr.flush()
+        diag_lines.append(f"FORMULA_API status={r1.status_code}")
+        diag_lines.append(f"FORMULA_API body={r1.text[:800]}")
     except Exception as ex:
-        sys.stderr.write(f"FORMULA_API exception: {ex}\n")
-        sys.stderr.flush()
+        diag_lines.append(f"FORMULA_API exception={ex}")
 
     # Test 2: Dedicated Estimates API
     try:
@@ -295,12 +293,13 @@ def main():
             headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
             timeout=30,
         )
-        sys.stderr.write(f"ESTIMATES_API status={r2.status_code}\n")
-        sys.stderr.write(f"ESTIMATES_API body={r2.text[:600]}\n")
-        sys.stderr.flush()
+        diag_lines.append(f"ESTIMATES_API status={r2.status_code}")
+        diag_lines.append(f"ESTIMATES_API body={r2.text[:800]}")
     except Exception as ex:
-        sys.stderr.write(f"ESTIMATES_API exception: {ex}\n")
-        sys.stderr.flush()
+        diag_lines.append(f"ESTIMATES_API exception={ex}")
+
+    with open("diag_output.txt", "w") as f:
+        f.write("\n".join(diag_lines))
 
     estimates = fetch_all_estimates(access_token, as_of_date, prior_date)
     print(f"Fetched estimates for {len(estimates)} metrics.", flush=True)
