@@ -95,6 +95,8 @@ def get_factset_token() -> str:
 
 # ── FactSet Estimates ─────────────────────────────────────────────────────────
 
+_debug_printed = set()
+
 def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: str, freq: str) -> float | str:
     formula = f'FE_ESTIMATE("{fds_code}","MEAN","{freq}","{period}","{as_of_date}")'
     resp = requests.post(
@@ -107,14 +109,18 @@ def fetch_estimate(access_token: str, fds_code: str, period: str, as_of_date: st
         timeout=30,
     )
     if resp.status_code != 200:
-        print(f"  API error {resp.status_code} for {fds_code}/{period}: {resp.text[:200]}")
+        print(f"  API error {resp.status_code} for {fds_code}/{period}: {resp.text[:300]}")
         return "na"
     try:
         body = resp.json()
+        # Print full response for first occurrence of each fds_code for debugging
+        if fds_code not in _debug_printed:
+            _debug_printed.add(fds_code)
+            print(f"  DEBUG {fds_code}/{period}: {json.dumps(body)[:400]}")
         value = body["data"][0]["result"][0]
         return round(float(value), 3) if value is not None else "na"
     except (KeyError, IndexError, TypeError, ValueError) as e:
-        print(f"  Parse error for {fds_code}/{period}: {e} | response: {str(body)[:200]}")
+        print(f"  Parse error for {fds_code}/{period}: {e} | response: {str(body)[:300]}")
         return "na"
 
 
