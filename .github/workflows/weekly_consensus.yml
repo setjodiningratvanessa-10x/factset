@@ -28,4 +28,4 @@ jobs:
           FACTSET_JWK: ${{ secrets.FACTSET_JWK }}
           GOOGLE_APPS_SCRIPT_URL: ${{ secrets.GOOGLE_APPS_SCRIPT_URL }}
           GOOGLE_APPS_SCRIPT_TOKEN: ${{ secrets.GOOGLE_APPS_SCRIPT_TOKEN }}
-        run: python scripts/update_consensus.py
+        run: python -u scripts/update_consensus.py
