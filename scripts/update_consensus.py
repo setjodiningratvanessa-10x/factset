@@ -282,45 +282,6 @@ def main():
     access_token = get_factset_token()
     print("FactSet token obtained.", flush=True)
 
-    # Diagnostic: test both API endpoints and write results to file
-    diag_lines = []
-
-    # Test 1: Formula API
-    try:
-        test_formula = f"FE_ESTIMATE(SALES,MEAN,ANN,'2026','{as_of_date}')"
-        r1 = requests.post(
-            FACTSET_FORMULA_URL,
-            json={"data": {"ids": [TICKER], "formulas": [test_formula]}},
-            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-            timeout=30,
-        )
-        diag_lines.append(f"FORMULA_API status={r1.status_code}")
-        diag_lines.append(f"FORMULA_API body={r1.text[:800]}")
-    except Exception as ex:
-        diag_lines.append(f"FORMULA_API exception={ex}")
-
-    # Test 2: Dedicated Estimates API
-    try:
-        r2 = requests.post(
-            "https://api.factset.com/content/factset-estimates/v2/consensus-estimates",
-            json={
-                "ids": [TICKER],
-                "metrics": ["SALES", "EPS"],
-                "periodicity": "ANNUAL",
-                "fiscalPeriodStart": "2026",
-                "fiscalPeriodEnd": "2027",
-                "currency": "USD",
-            },
-            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-            timeout=30,
-        )
-        diag_lines.append(f"ESTIMATES_API status={r2.status_code}")
-        diag_lines.append(f"ESTIMATES_API body={r2.text[:800]}")
-    except Exception as ex:
-        diag_lines.append(f"ESTIMATES_API exception={ex}")
-
-    with open("diag_output.txt", "w") as f:
-        f.write("\n".join(diag_lines))
 
     estimates = fetch_all_estimates(access_token, as_of_date, prior_date)
     print(f"Fetched estimates for {len(estimates)} metrics.", flush=True)
