@@ -397,9 +397,9 @@ function writeAnalystTab(ss, data) {
   var ws = ss.getSheetByName(tabName);
   if (ws) ss.deleteSheet(ws);
   ws = ss.insertSheet(tabName, 1);
-  ws.getRange(1, 1, 200, 13).setNumberFormat('@');
+  ws.getRange(1, 1, 200, 12).setNumberFormat('@');
 
-  var NUM_COLS = 13;
+  var NUM_COLS = 12;
 
   // Title
   ws.getRange(1, 1, 1, NUM_COLS).merge()
@@ -414,7 +414,7 @@ function writeAnalystTab(ss, data) {
                  'Q2\'26E', 'Q3\'26E', 'Q4\'26E', 'FY\'26E', 'FY\'27E',
                  'FY\'26 Growth\nExcl. BRKR & Vizgen\n(FY25 Rev - $599M)',
                  'FY\'26 Growth\nIncl. BRKR & Vizgen\n(FY25 Rev - $643M)',
-                 'FY\'27\nGrowth', ''];
+                 'FY\'27\nGrowth'];
   var hRange = ws.getRange(2, 1, 1, NUM_COLS);
   hRange.setValues([headers]);
   hRange.setBackground(C.navy).setFontColor(C.navyText)
@@ -428,7 +428,7 @@ function writeAnalystTab(ss, data) {
       var vals = [a.label, '', '', fmtPT(a.pt),
                   fmtRev(a.q2), fmtRev(a.q3), fmtRev(a.q4),
                   fmtRev(a.fy26), fmtRev(a.fy27),
-                  fmtGrowth(a.growth26exSett), fmtGrowth(a.growth26inclSett), fmtGrowth(a.growth27), ''];
+                  fmtGrowth(a.growth26exSett), fmtGrowth(a.growth26inclSett), fmtGrowth(a.growth27)];
       var r = ws.getRange(rowNum, 1, 1, NUM_COLS);
       r.setValues([vals]).setBackground(C.totalBg).setFontWeight('bold');
       ws.getRange(rowNum, 1, 1, NUM_COLS).setBorder(
@@ -443,7 +443,7 @@ function writeAnalystTab(ss, data) {
       var vals = [a.firm || '', a.analyst || '', a.rating || '', fmtPT(a.pt),
                   fmtRev(a.q2), fmtRev(a.q3), fmtRev(a.q4),
                   fmtRev(a.fy26), fmtRev(a.fy27),
-                  fmtGrowth(a.growth26exSett), fmtGrowth(a.growth26inclSett), fmtGrowth(a.growth27), ''];
+                  fmtGrowth(a.growth26exSett), fmtGrowth(a.growth26inclSett), fmtGrowth(a.growth27)];
       var r = ws.getRange(rowNum, 1, 1, NUM_COLS);
       r.setValues([vals]).setBackground(bg);
       ws.getRange(rowNum, 3).setBackground(ratingColor).setHorizontalAlignment('center');
@@ -470,10 +470,9 @@ function writeAnalystTab(ss, data) {
   ws.setColumnWidth(3, 80);   // Rating
   ws.setColumnWidth(4, 60);   // PT
   for (var c = 5; c <= 9; c++) ws.setColumnWidth(c, 72);
-  ws.setColumnWidth(10, 90);  // FY26 Growth ex-settlement
-  ws.setColumnWidth(11, 90);  // FY26 Growth incl-settlement
-  ws.setColumnWidth(12, 72);  // FY27 Growth
-  ws.setColumnWidth(13, 20);
+  ws.setColumnWidth(10, 120); // FY26 Growth ex-settlement
+  ws.setColumnWidth(11, 120); // FY26 Growth incl-settlement
+  ws.setColumnWidth(12, 80);  // FY27 Growth
 
   // Freeze rows only (no column freeze — conflicts with merged title row)
   ws.setFrozenRows(2);
