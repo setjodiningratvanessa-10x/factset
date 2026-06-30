@@ -81,9 +81,11 @@ function convertExcelToGoogleSheet(excelFile) {
 // ── Data extraction ───────────────────────────────────────────────────────────
 
 function extractData(ss) {
-  var cs = ss.getSheetByName('FactSet Consensus');
+  var cs = ss.getSheetByName('Hardcode Weekly FactSet Consensus') ||
+           ss.getSheetByName('FactSet Consensus') ||
+           ss.getSheetByName('Weekly FactSet Consensus');
   var as = ss.getSheetByName('Detailed Analyst Consensus');
-  if (!cs) throw new Error('Sheet "FactSet Consensus" not found in Excel file.');
+  if (!cs) throw new Error('Could not find consensus sheet. Available: ' + ss.getSheets().map(function(s){return s.getName();}).join(', '));
 
   var cData = cs.getDataRange().getValues();
   var aData = as ? as.getDataRange().getValues() : [];
@@ -109,18 +111,18 @@ function extractData(ss) {
     priorDate:   priorDate,
     periods:     periods,
     rows: {
-      instChromium:  { label: '  Chromium',              data: extractRow(12) },
-      instSpatial:   { label: '  Spatial',               data: extractRow(13) },
-      instVisium:    { label: '  Visium',                data: extractRow(14) },
-      instXenium:    { label: '  Xenium',                data: extractRow(15) },
-      instTotal:     { label: 'Instrument Revenue',      data: extractRow(16), isTotal: true },
-      consChromium:  { label: '  Chromium',              data: extractRow(18) },
-      consSpatial:   { label: '  Spatial',               data: extractRow(19) },
-      consVisium:    { label: '  Visium',                data: extractRow(20) },
-      consXenium:    { label: '  Xenium',                data: extractRow(21) },
-      consTotal:     { label: 'Consumables Revenue',     data: extractRow(22), isTotal: true },
-      services:      { label: 'Services Revenue',        data: extractRow(23) },
-      totalRev:      { label: 'Total Revenue',           data: extractRow(24), isTotal: true },
+      instChromium:  { label: '  Chromium',              data: extractRow(13) },
+      instSpatial:   { label: '  Spatial',               data: extractRow(14) },
+      instVisium:    { label: '  Visium',                data: extractRow(15) },
+      instXenium:    { label: '  Xenium',                data: extractRow(16) },
+      instTotal:     { label: 'Instrument Revenue',      data: extractRow(17), isTotal: true },
+      consChromium:  { label: '  Chromium',              data: extractRow(19) },
+      consSpatial:   { label: '  Spatial',               data: extractRow(20) },
+      consVisium:    { label: '  Visium',                data: extractRow(21) },
+      consXenium:    { label: '  Xenium',                data: extractRow(22) },
+      consTotal:     { label: 'Consumables Revenue',     data: extractRow(23), isTotal: true },
+      services:      { label: 'Services Revenue',        data: extractRow(24) },
+      totalRev:      { label: 'Total Revenue',           data: extractRow(25), isTotal: true },
       cogs:          { label: 'COGS',                    data: extractRow(27) },
       grossProfit:   { label: 'Gross Profit',            data: extractRow(28), isTotal: true },
       grossMargin:   { label: 'Gross Margin %',          data: extractRow(29), isMargin: true },
