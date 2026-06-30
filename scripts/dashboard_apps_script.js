@@ -268,7 +268,7 @@ function fmt(v, isMargin) {
 function fmtChg(v, isMargin) {
   if (v === null || v === undefined || v === '' || v === 'na' || v === '#N/A') return '';
   var n = parseFloat(String(v).replace(/[$,]/g, ''));
-  if (isNaN(n) || Math.abs(n) < 0.0001) return '—';
+  if (isNaN(n) || Math.abs(n) < 0.05) return '—';
   if (isMargin) {
     var pct = (n * 100).toFixed(1);
     return (n > 0 ? '+' : '') + pct + 'pp';
@@ -347,7 +347,7 @@ function writeConsensusTab(ss, data) {
       for (var i = 1; i < 6; i++) {
         var chgVal = parseFloat(d.chg[i]);
         var wowCell = ws.getRange(rowNum, 7 + i);
-        if (!isNaN(chgVal) && Math.abs(chgVal) > 0.0001) {
+        if (!isNaN(chgVal) && Math.abs(chgVal) >= 0.05) {
           wowCell.setBackground(chgVal > 0 ? C.positive : C.negative);
         } else {
           wowCell.setBackground(bg);
@@ -533,9 +533,10 @@ function sendUpdateEmail(data) {
 
   // Key rows to highlight in the email
   var highlight = [
+    { key: 'totalRev',    label: 'Total Revenue' },
     { key: 'instTotal',   label: 'Instrument Revenue' },
     { key: 'consTotal',   label: 'Consumables Revenue' },
-    { key: 'totalRev',    label: 'Total Revenue' },
+    null,
     { key: 'grossProfit', label: 'Gross Profit' },
     { key: 'grossMargin', label: 'Gross Margin %' },
     { key: 'ebit',        label: 'EBIT' },
@@ -559,8 +560,13 @@ function sendUpdateEmail(data) {
     headerCells += '<th style="padding:4px 10px;text-align:right;background:#1B3A6B;color:#fff;">WoW ' + p + '</th>';
   });
 
+  var NUM_COLS_EMAIL = 1 + periods.length + 1 + periods.length;
   var bodyRows = '';
   highlight.forEach(function(item, idx) {
+    if (!item) {
+      bodyRows += '<tr><td colspan="' + NUM_COLS_EMAIL + '" style="padding:4px;"></td></tr>';
+      return;
+    }
     var row = data.rows[item.key];
     if (!row) return;
     var d = row.data;
@@ -576,7 +582,7 @@ function sendUpdateEmail(data) {
     tds += '<td style="width:10px;' + trBg + '"></td>';
     for (var i = 1; i < 6; i++) {
       var chgVal = parseFloat(d.chg[i]);
-      var chgBg = (!isNaN(chgVal) && Math.abs(chgVal) > 0.0001) ? (chgVal > 0 ? 'background:#C6EFCE;' : 'background:#FFC7CE;') : trBg;
+      var chgBg = (!isNaN(chgVal) && Math.abs(chgVal) >= 0.05) ? (chgVal > 0 ? 'background:#C6EFCE;' : 'background:#FFC7CE;') : trBg;
       tds += '<td style="padding:4px 10px;text-align:right;' + chgBg + (bold ? 'font-weight:bold;' : '') + '">' + fmtChg(d.chg[i], isMargin) + '</td>';
     }
     bodyRows += '<tr>' + tds + '</tr>';
