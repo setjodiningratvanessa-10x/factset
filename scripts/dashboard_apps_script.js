@@ -19,7 +19,8 @@ var DASHBOARD_URL    = 'https://docs.google.com/spreadsheets/d/12msONEnrKwfS6sp0
 
 // Add or remove email addresses here
 var EMAIL_RECIPIENTS = [
-  'vanessa.setjodinngrat@10xgenomics.com'
+  'vanessa.setjodinngrat@10xgenomics.com',
+  'cassie.corneau@10xgenomics.com'
 ];
 
 // Brand colors
