@@ -591,9 +591,7 @@ function sendUpdateEmail(data) {
   // ── Analyst Detail table ──
   var analystHeaderCells = ['Firm','Analyst','Rating','Price Target',
                             "Q2'26E","Q3'26E","Q4'26E","FY'26E","FY'27E",
-                            "FY'26 Growth (Excl. BRKR & Vizgen, FY25 Rev - $599M)",
-                            "FY'26 Growth (Incl. BRKR & Vizgen, FY25 Rev - $643M)",
-                            "FY'27 Growth"]
+                            "FY'26 Growth*","FY'27 Growth"]
     .map(function(h, i) {
       var align = i >= 3 ? 'text-align:right;' : 'text-align:left;';
       return '<th style="padding:4px 10px;' + align + 'background:#1B3A6B;color:#fff;white-space:nowrap;">' + h + '</th>';
@@ -613,7 +611,6 @@ function sendUpdateEmail(data) {
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy26) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy27) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtGrowth(a.growth26exSett) + '</td>',
-        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtGrowth(a.growth26inclSett) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtGrowth(a.growth27) + '</td>',
       ];
       analystBodyRows += '<tr>' + cells.join('') + '</tr>';
@@ -635,7 +632,6 @@ function sendUpdateEmail(data) {
         td(fmtRev(a.fy26), 'text-align:right;'),
         td(fmtRev(a.fy27), 'text-align:right;'),
         td(fmtGrowth(a.growth26exSett), 'text-align:right;'),
-        td(fmtGrowth(a.growth26inclSett), 'text-align:right;'),
         td(fmtGrowth(a.growth27), 'text-align:right;'),
       ];
       analystBodyRows += '<tr>' + cells.join('') + '</tr>';
@@ -654,6 +650,7 @@ function sendUpdateEmail(data) {
     + '<thead><tr>' + analystHeaderCells + '</tr></thead>'
     + '<tbody>' + analystBodyRows + '</tbody>'
     + '</table>'
+    + '<p style="margin:10px 0 4px;font-size:10px;color:#888;">* FY\'26 growth is based on FY\'25 revenue of $599M, excluding BRKR and Vizgen settlement revenue.</p>'
     + '<p style="margin:16px 0 4px;"><a href="' + DASHBOARD_URL + '">Open full dashboard →</a></p>'
     + '<p style="margin:0;font-size:11px;color:#888;">Automated update from TXG FactSet Dashboard</p>'
     + '</div>';
