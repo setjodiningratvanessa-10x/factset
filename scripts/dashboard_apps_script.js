@@ -137,22 +137,27 @@ function extractData(ss) {
   // Extract analyst data
   var analysts = [];
   if (aData.length > 0) {
+    var lastFirm = '';
     for (var i = 9; i < aData.length; i++) {
       var r = aData[i];
-      // Skip blank rows, mean/median rows, header rows
-      if (!r[2] && !r[4]) continue;
-      var firm = r[2] || '';
-      var analyst = r[5] || '';
-      if (!firm && !analyst) continue;
-      if (typeof firm === 'string' && (firm === 'Firm' || firm.indexOf('Consensus') >= 0)) continue;
-      if (typeof analyst === 'string' && (analyst === 'Mean' || analyst === 'Median' || analyst === 'FactSet Consensus')) {
-        analysts.push({ isSummary: true, label: analyst,
+      var firm     = String(r[2] || '').trim();
+      var analyst  = String(r[5] || '').trim();
+      var colLabel = String(r[4] || '').trim();
+
+      if (!firm && !analyst && !colLabel) continue;
+      if (!analyst && colLabel.indexOf('Current') >= 0) continue;
+
+      if (colLabel === 'Mean' || colLabel === 'Median' || colLabel === 'FactSet Consensus') {
+        analysts.push({ isSummary: true, label: colLabel,
           pt: r[8], q1: r[9], q2: r[10], q3: r[11], q4: r[12], fy26: r[13], fy27: r[14] });
         continue;
       }
+
+      if (firm) lastFirm = firm;
       if (!analyst) continue;
+
       analysts.push({
-        firm: firm, analyst: analyst,
+        firm: lastFirm, analyst: analyst,
         date: r[6], rating: r[7], pt: r[8],
         q1: r[9], q2: r[10], q3: r[11], q4: r[12],
         fy26: r[13], fy27: r[14],
