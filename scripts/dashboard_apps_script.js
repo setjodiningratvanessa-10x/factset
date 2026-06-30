@@ -209,11 +209,11 @@ function writeConsensusTab(ss, data) {
     ? Utilities.formatDate(data.priorDate, Session.getScriptTimeZone(), 'MM/dd/yyyy')
     : String(data.priorDate);
 
-  var headers = ['', 'Q1\'26', 'Q2\'26', 'Q3\'26', 'Q4\'26', 'FY\'26', 'FY\'27',
-                 '', 'WoW Q1', 'WoW Q2', 'WoW Q3', 'WoW Q4', 'WoW FY\'26', 'WoW FY\'27'];
+  var headers = ['', 'Q2\'26', 'Q3\'26', 'Q4\'26', 'FY\'26', 'FY\'27',
+                 '', 'WoW Q2', 'WoW Q3', 'WoW Q4', 'WoW FY\'26', 'WoW FY\'27'];
 
   // ── Title rows ──
-  ws.getRange(1, 1, 1, 14).merge()
+  ws.getRange(1, 1, 1, 12).merge()
     .setValue('TXG — Weekly FactSet Consensus')
     .setBackground(C.navy).setFontColor(C.navyText)
     .setFontSize(14).setFontWeight('bold')
@@ -221,11 +221,11 @@ function writeConsensusTab(ss, data) {
   ws.setRowHeight(1, 36);
 
   ws.getRange(2, 1).setValue('As of ' + dateStr).setFontWeight('bold').setFontSize(10);
-  ws.getRange(2, 8).setValue('WoW vs ' + priorStr).setFontStyle('italic').setFontSize(9)
+  ws.getRange(2, 7).setValue('WoW vs ' + priorStr).setFontStyle('italic').setFontSize(9)
     .setFontColor('#555555');
 
   // ── Column headers ──
-  var hRow = ws.getRange(3, 1, 1, 14);
+  var hRow = ws.getRange(3, 1, 1, 12);
   hRow.setValues([headers]);
   hRow.setBackground(C.navy).setFontColor(C.navyText).setFontWeight('bold')
     .setHorizontalAlignment('center');
@@ -236,7 +236,7 @@ function writeConsensusTab(ss, data) {
 
   function writeSection(title, keys) {
     // Section header
-    ws.getRange(rowNum, 1, 1, 14).merge()
+    ws.getRange(rowNum, 1, 1, 12).merge()
       .setValue(title)
       .setBackground(C.sectionBg).setFontColor(C.sectionText)
       .setFontWeight('bold').setFontSize(10);
@@ -251,29 +251,29 @@ function writeConsensusTab(ss, data) {
       var bg = isTotal ? C.totalBg : (idx % 2 === 0 ? C.neutral : C.altRow);
 
       var rowValues = [item.label];
-      // Current values
-      for (var i = 0; i < 6; i++) rowValues.push(fmt(d.curr[i], isMargin));
+      // Current values — skip index 0 (Q1)
+      for (var i = 1; i < 6; i++) rowValues.push(fmt(d.curr[i], isMargin));
       rowValues.push(''); // spacer
-      // WoW changes
-      for (var i = 0; i < 6; i++) rowValues.push(fmtChg(d.chg[i], isMargin));
+      // WoW changes — skip index 0 (Q1)
+      for (var i = 1; i < 6; i++) rowValues.push(fmtChg(d.chg[i], isMargin));
 
-      var r = ws.getRange(rowNum, 1, 1, 14);
+      var r = ws.getRange(rowNum, 1, 1, 12);
       r.setValues([rowValues]);
       r.setBackground(bg);
       if (isTotal) r.setFontWeight('bold');
 
-      // Color the WoW cells
-      for (var i = 0; i < 6; i++) {
+      // Color the WoW cells (cols 8–12, skipping Q1)
+      for (var i = 1; i < 6; i++) {
         var chgVal = parseFloat(d.chg[i]);
         if (!isNaN(chgVal) && Math.abs(chgVal) > 0.0001) {
           var cellBg = chgVal > 0 ? C.positive : C.negative;
-          ws.getRange(rowNum, 9 + i).setBackground(cellBg);
+          ws.getRange(rowNum, 7 + i).setBackground(cellBg);
         }
       }
 
       // Right-align numeric columns
-      ws.getRange(rowNum, 2, 1, 6).setHorizontalAlignment('right');
-      ws.getRange(rowNum, 9, 1, 6).setHorizontalAlignment('right');
+      ws.getRange(rowNum, 2, 1, 5).setHorizontalAlignment('right');
+      ws.getRange(rowNum, 8, 1, 5).setHorizontalAlignment('right');
 
       ws.setRowHeight(rowNum, 18);
       rowNum++;
@@ -287,18 +287,18 @@ function writeConsensusTab(ss, data) {
   writeSection('P&L ($M)', ['cogs','grossProfit','grossMargin','rd','sga','totalOpex','ebit','netIncome']);
 
   // Note row
-  ws.getRange(rowNum, 1, 1, 14).merge()
+  ws.getRange(rowNum, 1, 1, 12).merge()
     .setValue('Note: Product segment figures are averages across available analysts and may not tie to total revenue.')
     .setFontStyle('italic').setFontSize(8).setFontColor('#666666');
 
   // ── Column widths ──
   ws.setColumnWidth(1, 180);
-  for (var c = 2; c <= 7; c++) ws.setColumnWidth(c, 75);
-  ws.setColumnWidth(8, 20);
-  for (var c = 9; c <= 14; c++) ws.setColumnWidth(c, 72);
+  for (var c = 2; c <= 6; c++) ws.setColumnWidth(c, 75);
+  ws.setColumnWidth(7, 20);
+  for (var c = 8; c <= 12; c++) ws.setColumnWidth(c, 72);
 
   // ── Borders ──
-  ws.getRange(3, 1, rowNum - 3, 14)
+  ws.getRange(3, 1, rowNum - 3, 12)
     .setBorder(true, true, true, true, true, false,
                C.border, SpreadsheetApp.BorderStyle.SOLID);
 
