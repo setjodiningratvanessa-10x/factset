@@ -529,7 +529,7 @@ function sendUpdateEmail(data) {
     ? Utilities.formatDate(data.priorDate, Session.getScriptTimeZone(), 'MM/dd/yyyy')
     : String(data.priorDate);
 
-  var subject = 'TXG FactSet Consensus Update — ' + dateStr;
+  var subject = 'TXG Consensus Update — ' + dateStr;
 
   // Key rows to highlight in the email
   var highlight = [
@@ -639,13 +639,13 @@ function sendUpdateEmail(data) {
   });
 
   var html = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#222;">'
-    + '<p style="margin:0 0 12px;"><strong>TXG Weekly FactSet Consensus</strong><br>'
+    + '<p style="margin:0 0 12px;"><strong>FactSet Consensus</strong><br>'
     + 'As of <strong>' + dateStr + '</strong> &nbsp;|&nbsp; WoW vs ' + priorStr + '</p>'
     + '<table style="border-collapse:collapse;font-size:12px;">'
     + '<thead><tr>' + headerCells + '</tr></thead>'
     + '<tbody>' + bodyRows + '</tbody>'
     + '</table>'
-    + '<p style="margin:24px 0 6px;font-size:13px;font-weight:bold;">Analyst Consensus Detail</p>'
+    + '<p style="margin:24px 0 6px;font-size:13px;font-weight:bold;">Detailed Internal Analyst Consensus</p>'
     + '<table style="border-collapse:collapse;font-size:12px;">'
     + '<thead><tr>' + analystHeaderCells + '</tr></thead>'
     + '<tbody>' + analystBodyRows + '</tbody>'
