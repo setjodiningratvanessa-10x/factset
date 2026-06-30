@@ -272,7 +272,7 @@ function fmt(v, isMargin) {
   var n = parseFloat(v);
   if (isNaN(n)) return String(v);
   if (isMargin) return (n * 100).toFixed(1) + '%';
-  return n.toFixed(1);
+  return '$' + n.toFixed(1);
 }
 
 function fmtChg(v, isMargin) {
@@ -283,7 +283,7 @@ function fmtChg(v, isMargin) {
     var pct = (n * 100).toFixed(1);
     return (n > 0 ? '+' : '') + pct + 'pp';
   }
-  return (n > 0 ? '+' : '') + n.toFixed(1);
+  return (n > 0 ? '+$' : '-$') + Math.abs(n).toFixed(1);
 }
 
 function writeConsensusTab(ss, data) {
