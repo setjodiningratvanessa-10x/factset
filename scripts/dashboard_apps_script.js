@@ -291,6 +291,7 @@ function writeConsensusTab(ss, data) {
   var ws = ss.getSheetByName(tabName);
   if (ws) ss.deleteSheet(ws);
   ws = ss.insertSheet(tabName, 0);
+  ws.getRange(1, 1, 200, 12).setNumberFormat('@');
 
   var dateStr = data.currentDate instanceof Date
     ? Utilities.formatDate(data.currentDate, Session.getScriptTimeZone(), 'MM/dd/yyyy')
@@ -403,6 +404,7 @@ function writeAnalystTab(ss, data) {
   var ws = ss.getSheetByName(tabName);
   if (ws) ss.deleteSheet(ws);
   ws = ss.insertSheet(tabName, 1);
+  ws.getRange(1, 1, 200, 12).setNumberFormat('@');
 
   var NUM_COLS = 12;
 
