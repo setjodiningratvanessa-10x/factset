@@ -269,7 +269,7 @@ function writeDashboard(data) {
 
 function fmt(v, isMargin) {
   if (v === null || v === undefined || v === '' || v === 'na' || v === '#N/A') return 'na';
-  var n = parseFloat(v);
+  var n = parseFloat(String(v).replace(/[$,]/g, ''));
   if (isNaN(n)) return String(v);
   if (isMargin) return (n * 100).toFixed(1) + '%';
   return '$' + n.toFixed(1);
@@ -277,7 +277,7 @@ function fmt(v, isMargin) {
 
 function fmtChg(v, isMargin) {
   if (v === null || v === undefined || v === '' || v === 'na' || v === '#N/A') return '';
-  var n = parseFloat(v);
+  var n = parseFloat(String(v).replace(/[$,]/g, ''));
   if (isNaN(n) || Math.abs(n) < 0.0001) return '—';
   if (isMargin) {
     var pct = (n * 100).toFixed(1);
@@ -666,7 +666,7 @@ function fmtPT(v) {
 
 function fmtRev(v) {
   if (!v || v === 'na') return '';
-  var n = parseFloat(v);
+  var n = parseFloat(String(v).replace(/[$,]/g, ''));
   return isNaN(n) ? '' : '$' + n.toFixed(1);
 }
 
