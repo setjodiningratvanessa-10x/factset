@@ -14,7 +14,13 @@
 //  a formatted dashboard, then deletes the temp sheet.
 // ─────────────────────────────────────────────────────────────────────────────
 
-var DRIVE_FOLDER_ID = '1f9Wx7BAg5mhaeCpfM0R-hqrRfCn761q9';
+var DRIVE_FOLDER_ID  = '1f9Wx7BAg5mhaeCpfM0R-hqrRfCn761q9';
+var DASHBOARD_URL    = 'https://docs.google.com/spreadsheets/d/12msONEnrKwfS6sp0c-oAI_qvxwlFWdR0j2JJShMyG98';
+
+// Add or remove email addresses here
+var EMAIL_RECIPIENTS = [
+  'vanessa.setjodinngrat@10xgenomics.com'
+];
 
 // Brand colors
 var C = {
@@ -49,7 +55,22 @@ function updateDashboard() {
   try {
     var data = extractData(tempSS);
     writeDashboard(data);
+    sendUpdateEmail(data);
     Logger.log('Dashboard updated successfully.');
+  } finally {
+    DriveApp.getFileById(tempSS.getId()).setTrashed(true);
+  }
+}
+
+// Run this function manually to send a test email without refreshing the dashboard
+function testEmail() {
+  var excelFile = findLatestExcelFile();
+  if (!excelFile) { Logger.log('No Excel file found.'); return; }
+  var tempSS = convertExcelToGoogleSheet(excelFile);
+  try {
+    var data = extractData(tempSS);
+    sendUpdateEmail(data);
+    Logger.log('Test email sent.');
   } finally {
     DriveApp.getFileById(tempSS.getId()).setTrashed(true);
   }
@@ -445,6 +466,89 @@ function writeAnalystTab(ss, data) {
 
   // Freeze rows only (no column freeze — conflicts with merged title row)
   ws.setFrozenRows(2);
+}
+
+// ── Email ─────────────────────────────────────────────────────────────────────
+
+function sendUpdateEmail(data) {
+  var dateStr = data.currentDate instanceof Date
+    ? Utilities.formatDate(data.currentDate, Session.getScriptTimeZone(), 'MM/dd/yyyy')
+    : String(data.currentDate);
+  var priorStr = data.priorDate instanceof Date
+    ? Utilities.formatDate(data.priorDate, Session.getScriptTimeZone(), 'MM/dd/yyyy')
+    : String(data.priorDate);
+
+  var subject = 'TXG FactSet Consensus Update — ' + dateStr;
+
+  // Key rows to highlight in the email
+  var highlight = [
+    { key: 'instTotal',   label: 'Instrument Revenue' },
+    { key: 'consTotal',   label: 'Consumables Revenue' },
+    { key: 'totalRev',    label: 'Total Revenue' },
+    { key: 'grossProfit', label: 'Gross Profit' },
+    { key: 'grossMargin', label: 'Gross Margin %' },
+    { key: 'ebit',        label: 'EBIT' },
+    { key: 'netIncome',   label: 'Net Income' },
+  ];
+
+  var periods = ["Q2'26", "Q3'26", "Q4'26", "FY'26", "FY'27"];
+
+  function cellStyle(chgVal, bold) {
+    var bg = '';
+    if (!isNaN(chgVal) && Math.abs(chgVal) > 0.0001) bg = chgVal > 0 ? 'background:#C6EFCE;' : 'background:#FFC7CE;';
+    return 'style="padding:4px 10px;text-align:right;' + bg + (bold ? 'font-weight:bold;' : '') + '"';
+  }
+
+  var headerCells = '<th style="padding:4px 10px;text-align:left;background:#1B3A6B;color:#fff;">Metric</th>';
+  periods.forEach(function(p) {
+    headerCells += '<th style="padding:4px 10px;text-align:right;background:#1B3A6B;color:#fff;">' + p + '</th>';
+  });
+  headerCells += '<th style="padding:4px 10px;background:#1B3A6B;color:#fff;width:10px;"></th>';
+  periods.forEach(function(p) {
+    headerCells += '<th style="padding:4px 10px;text-align:right;background:#1B3A6B;color:#fff;">WoW ' + p + '</th>';
+  });
+
+  var bodyRows = '';
+  highlight.forEach(function(item, idx) {
+    var row = data.rows[item.key];
+    if (!row) return;
+    var d = row.data;
+    var isMargin = !!row.isMargin;
+    var isTotal  = !!row.isTotal;
+    var trBg = isTotal ? 'background:#EBF3FB;' : (idx % 2 === 0 ? '' : 'background:#F7FAFD;');
+    var bold = isTotal || isMargin;
+
+    var tds = '<td style="padding:4px 10px;' + trBg + (bold ? 'font-weight:bold;' : '') + '">' + item.label + '</td>';
+    for (var i = 1; i < 6; i++) {
+      tds += '<td style="padding:4px 10px;text-align:right;' + trBg + (bold ? 'font-weight:bold;' : '') + '">' + fmt(d.curr[i], isMargin) + '</td>';
+    }
+    tds += '<td style="width:10px;' + trBg + '"></td>';
+    for (var i = 1; i < 6; i++) {
+      var chgVal = parseFloat(d.chg[i]);
+      var chgBg = (!isNaN(chgVal) && Math.abs(chgVal) > 0.0001) ? (chgVal > 0 ? 'background:#C6EFCE;' : 'background:#FFC7CE;') : trBg;
+      tds += '<td style="padding:4px 10px;text-align:right;' + chgBg + (bold ? 'font-weight:bold;' : '') + '">' + fmtChg(d.chg[i], isMargin) + '</td>';
+    }
+    bodyRows += '<tr>' + tds + '</tr>';
+  });
+
+  var html = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#222;">'
+    + '<p style="margin:0 0 12px;"><strong>TXG Weekly FactSet Consensus</strong><br>'
+    + 'As of <strong>' + dateStr + '</strong> &nbsp;|&nbsp; WoW vs ' + priorStr + '</p>'
+    + '<table style="border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr>' + headerCells + '</tr></thead>'
+    + '<tbody>' + bodyRows + '</tbody>'
+    + '</table>'
+    + '<p style="margin:16px 0 4px;"><a href="' + DASHBOARD_URL + '">Open full dashboard →</a></p>'
+    + '<p style="margin:0;font-size:11px;color:#888;">Automated update from TXG FactSet Dashboard</p>'
+    + '</div>';
+
+  MailApp.sendEmail({
+    to: EMAIL_RECIPIENTS.join(','),
+    subject: subject,
+    htmlBody: html
+  });
+
+  Logger.log('Email sent to: ' + EMAIL_RECIPIENTS.join(', '));
 }
 
 function fmtPT(v) {
