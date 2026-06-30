@@ -582,12 +582,67 @@ function sendUpdateEmail(data) {
     bodyRows += '<tr>' + tds + '</tr>';
   });
 
+  // ── Analyst Detail table ──
+  var analystHeaderCells = ['Firm','Analyst','Rating','Price Target',
+                            "Q2'26E","Q3'26E","Q4'26E","FY'26E","FY'27E",
+                            "FY'26 Growth","FY'27 Growth"]
+    .map(function(h, i) {
+      var align = i >= 3 ? 'text-align:right;' : 'text-align:left;';
+      return '<th style="padding:4px 10px;' + align + 'background:#1B3A6B;color:#fff;white-space:nowrap;">' + h + '</th>';
+    }).join('');
+
+  var analystBodyRows = '';
+  data.analysts.forEach(function(a, idx) {
+    if (a.isSummary) {
+      var cells = [
+        '<td style="padding:4px 8px;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + a.label + '</td>',
+        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
+        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtPT(a.pt) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.q2) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.q3) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.q4) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy26) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy27) + '</td>',
+        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
+        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
+      ];
+      analystBodyRows += '<tr>' + cells.join('') + '</tr>';
+    } else {
+      var rowBg = idx % 2 === 0 ? '' : 'background:#F7FAFD;';
+      var ratingBg = '';
+      if (a.rating === 'Buy')                                      ratingBg = 'background:#C6EFCE;';
+      else if (a.rating === 'Hold')                                ratingBg = 'background:#FFEB9C;';
+      else if (a.rating === 'Sell' || a.rating === 'Underperform') ratingBg = 'background:#FFC7CE;';
+      var td = function(val, extra) { return '<td style="padding:4px 8px;' + rowBg + (extra||'') + '">' + (val||'') + '</td>'; };
+      var cells = [
+        td(a.firm),
+        td(a.analyst),
+        '<td style="padding:4px 8px;text-align:center;' + ratingBg + '">' + (a.rating||'') + '</td>',
+        td(fmtPT(a.pt), 'text-align:right;'),
+        td(fmtRev(a.q2), 'text-align:right;'),
+        td(fmtRev(a.q3), 'text-align:right;'),
+        td(fmtRev(a.q4), 'text-align:right;'),
+        td(fmtRev(a.fy26), 'text-align:right;'),
+        td(fmtRev(a.fy27), 'text-align:right;'),
+        td(fmtGrowth(a.growth26), 'text-align:right;'),
+        td(fmtGrowth(a.growth27), 'text-align:right;'),
+      ];
+      analystBodyRows += '<tr>' + cells.join('') + '</tr>';
+    }
+  });
+
   var html = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#222;">'
     + '<p style="margin:0 0 12px;"><strong>TXG Weekly FactSet Consensus</strong><br>'
     + 'As of <strong>' + dateStr + '</strong> &nbsp;|&nbsp; WoW vs ' + priorStr + '</p>'
     + '<table style="border-collapse:collapse;font-size:12px;">'
     + '<thead><tr>' + headerCells + '</tr></thead>'
     + '<tbody>' + bodyRows + '</tbody>'
+    + '</table>'
+    + '<p style="margin:24px 0 6px;font-size:13px;font-weight:bold;">Analyst Consensus Detail</p>'
+    + '<table style="border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr>' + analystHeaderCells + '</tr></thead>'
+    + '<tbody>' + analystBodyRows + '</tbody>'
     + '</table>'
     + '<p style="margin:16px 0 4px;"><a href="' + DASHBOARD_URL + '">Open full dashboard →</a></p>'
     + '<p style="margin:0;font-size:11px;color:#888;">Automated update from TXG FactSet Dashboard</p>'
