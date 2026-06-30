@@ -55,14 +55,18 @@ function updateDashboard() {
   try {
     var data = extractData(tempSS);
     writeDashboard(data);
-    sendUpdateEmail(data);
+    if (hasDataChanged(data)) {
+      sendUpdateEmail(data);
+    } else {
+      Logger.log('No changes detected — email not sent.');
+    }
     Logger.log('Dashboard updated successfully.');
   } finally {
     DriveApp.getFileById(tempSS.getId()).setTrashed(true);
   }
 }
 
-// Run this function manually to send a test email without refreshing the dashboard
+// Run this function manually to send a test email (bypasses change detection)
 function testEmail() {
   var excelFile = findLatestExcelFile();
   if (!excelFile) { Logger.log('No Excel file found.'); return; }
@@ -74,6 +78,13 @@ function testEmail() {
   } finally {
     DriveApp.getFileById(tempSS.getId()).setTrashed(true);
   }
+}
+
+// Run this to clear the saved fingerprint so the next updateDashboard() run
+// treats everything as new and sends an email regardless
+function resetChangeDetection() {
+  PropertiesService.getScriptProperties().deleteProperty('lastDataFingerprint');
+  Logger.log('Change detection reset — next run will send email.');
 }
 
 // ── Drive helpers ─────────────────────────────────────────────────────────────
@@ -466,6 +477,46 @@ function writeAnalystTab(ss, data) {
 
   // Freeze rows only (no column freeze — conflicts with merged title row)
   ws.setFrozenRows(2);
+}
+
+// ── Change detection ──────────────────────────────────────────────────────────
+
+function buildFingerprint(data) {
+  // Capture WoW change values for all consensus rows
+  var wowParts = [];
+  var rowKeys = ['instChromium','instSpatial','instVisium','instXenium','instTotal',
+                 'consChromium','consSpatial','consVisium','consXenium','consTotal',
+                 'services','totalRev','cogs','grossProfit','grossMargin',
+                 'rd','sga','totalOpex','ebit','netIncome'];
+  rowKeys.forEach(function(key) {
+    var row = data.rows[key];
+    if (!row) return;
+    // indices 1-5 = Q2-FY27 WoW changes
+    for (var i = 1; i < 6; i++) {
+      var v = row.data.chg[i];
+      wowParts.push(key + '_' + i + ':' + (v === null || v === undefined ? '' : String(v)));
+    }
+  });
+
+  // Capture analyst names + key estimates
+  var analystParts = data.analysts.map(function(a) {
+    if (a.isSummary) return a.label + ':' + [a.pt, a.q2, a.q3, a.q4, a.fy26, a.fy27].join(',');
+    return (a.firm || '') + '|' + (a.analyst || '') + ':' + [a.rating, a.pt, a.q2, a.q3, a.q4, a.fy26, a.fy27].join(',');
+  });
+
+  return wowParts.join(';') + '||' + analystParts.join(';');
+}
+
+function hasDataChanged(data) {
+  var props = PropertiesService.getScriptProperties();
+  var lastFingerprint = props.getProperty('lastDataFingerprint') || '';
+  var currentFingerprint = buildFingerprint(data);
+
+  if (currentFingerprint === lastFingerprint) return false;
+
+  // Save new fingerprint so next run compares against this one
+  props.setProperty('lastDataFingerprint', currentFingerprint);
+  return true;
 }
 
 // ── Email ─────────────────────────────────────────────────────────────────────
