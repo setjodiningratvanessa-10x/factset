@@ -413,13 +413,15 @@ function writeAnalystTab(ss, data) {
   // Headers — no Date column
   var headers = ['Firm', 'Analyst', 'Rating', 'Price\nTarget',
                  'Q2\'26E', 'Q3\'26E', 'Q4\'26E', 'FY\'26E', 'FY\'27E',
-                 'FY\'26\nGrowth\n(ex. $599M)', 'FY\'26\nGrowth\n(incl. $599M)', 'FY\'27\nGrowth', ''];
+                 'FY\'26 Growth\nExcl. BRKR & Vizgen\n(FY25 Rev - $599M)',
+                 'FY\'26 Growth\nIncl. BRKR & Vizgen\n(FY25 Rev - $643M)',
+                 'FY\'27\nGrowth', ''];
   var hRange = ws.getRange(2, 1, 1, NUM_COLS);
   hRange.setValues([headers]);
   hRange.setBackground(C.navy).setFontColor(C.navyText)
     .setFontWeight('bold').setHorizontalAlignment('center')
     .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-  ws.setRowHeight(2, 30);
+  ws.setRowHeight(2, 50);
 
   var rowNum = 3;
   data.analysts.forEach(function(a, idx) {
@@ -584,7 +586,9 @@ function sendUpdateEmail(data) {
   // ── Analyst Detail table ──
   var analystHeaderCells = ['Firm','Analyst','Rating','Price Target',
                             "Q2'26E","Q3'26E","Q4'26E","FY'26E","FY'27E",
-                            "FY'26 Growth (ex. $599M)","FY'26 Growth (incl. $599M)","FY'27 Growth"]
+                            "FY'26 Growth (Excl. BRKR & Vizgen, FY25 Rev - $599M)",
+                            "FY'26 Growth (Incl. BRKR & Vizgen, FY25 Rev - $643M)",
+                            "FY'27 Growth"]
     .map(function(h, i) {
       var align = i >= 3 ? 'text-align:right;' : 'text-align:left;';
       return '<th style="padding:4px 10px;' + align + 'background:#1B3A6B;color:#fff;white-space:nowrap;">' + h + '</th>';
