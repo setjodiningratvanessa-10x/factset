@@ -56,36 +56,25 @@ function updateDashboard() {
   try {
     var data = extractData(tempSS);
     writeDashboard(data);
-    if (hasDataChanged(data)) {
-      sendUpdateEmail(data);
-    } else {
-      Logger.log('No changes detected — email not sent.');
-    }
     Logger.log('Dashboard updated successfully.');
   } finally {
     DriveApp.getFileById(tempSS.getId()).setTrashed(true);
   }
 }
 
-// Run this function manually to send a test email (bypasses change detection)
-function testEmail() {
+// Run this function manually to send the email update
+function triggerEmail() {
   var excelFile = findLatestExcelFile();
   if (!excelFile) { Logger.log('No Excel file found.'); return; }
   var tempSS = convertExcelToGoogleSheet(excelFile);
   try {
     var data = extractData(tempSS);
     sendUpdateEmail(data);
-    Logger.log('Test email sent.');
+    Logger.log('Email sent.');
   } finally {
     DriveApp.getFileById(tempSS.getId()).setTrashed(true);
   }
 }
-
-// Run this to clear the saved fingerprint so the next updateDashboard() run
-// treats everything as new and sends an email regardless
-function resetChangeDetection() {
-  PropertiesService.getScriptProperties().deleteProperty('lastDataFingerprint');
-  Logger.log('Change detection reset — next run will send email.');
 }
 
 // ── Drive helpers ─────────────────────────────────────────────────────────────
@@ -241,17 +230,18 @@ function extractData(ss) {
       if (!analyst) continue;
 
       analysts.push({
-        firm:     lastFirm,
-        analyst:  analyst,
-        rating:   r[7],
-        pt:       r[8],
-        q2:       r[10],
-        q3:       r[11],
-        q4:       r[12],
-        fy26:     r[13],
-        fy27:     r[14],
-        growth26: r[15],
-        growth27: r[18]
+        firm:          lastFirm,
+        analyst:       analyst,
+        rating:        r[7],
+        pt:            r[8],
+        q2:            r[10],
+        q3:            r[11],
+        q4:            r[12],
+        fy26:          r[13],
+        fy27:          r[14],
+        growth26exSett:   r[15],
+        growth26inclSett: r[16],
+        growth27:      r[18]
       });
     }
   }
@@ -272,7 +262,7 @@ function fmt(v, isMargin) {
   var n = parseFloat(String(v).replace(/[$,]/g, ''));
   if (isNaN(n)) return String(v);
   if (isMargin) return (n * 100).toFixed(1) + '%';
-  return '$' + n.toFixed(1);
+  return n < 0 ? '($' + Math.abs(n).toFixed(1) + ')' : '$' + n.toFixed(1);
 }
 
 function fmtChg(v, isMargin) {
@@ -283,7 +273,7 @@ function fmtChg(v, isMargin) {
     var pct = (n * 100).toFixed(1);
     return (n > 0 ? '+' : '') + pct + 'pp';
   }
-  return (n > 0 ? '+$' : '-$') + Math.abs(n).toFixed(1);
+  return n > 0 ? '+$' + n.toFixed(1) : '($' + Math.abs(n).toFixed(1) + ')';
 }
 
 function writeConsensusTab(ss, data) {
@@ -353,11 +343,14 @@ function writeConsensusTab(ss, data) {
       r.setBackground(bg);
       if (isTotal) r.setFontWeight('bold');
 
-      // Color the WoW cells (cols 8–12)
+      // Color the WoW cells (cols 8–12); explicitly neutral for zero
       for (var i = 1; i < 6; i++) {
         var chgVal = parseFloat(d.chg[i]);
+        var wowCell = ws.getRange(rowNum, 7 + i);
         if (!isNaN(chgVal) && Math.abs(chgVal) > 0.0001) {
-          ws.getRange(rowNum, 7 + i).setBackground(chgVal > 0 ? C.positive : C.negative);
+          wowCell.setBackground(chgVal > 0 ? C.positive : C.negative);
+        } else {
+          wowCell.setBackground(bg);
         }
       }
 
@@ -404,9 +397,9 @@ function writeAnalystTab(ss, data) {
   var ws = ss.getSheetByName(tabName);
   if (ws) ss.deleteSheet(ws);
   ws = ss.insertSheet(tabName, 1);
-  ws.getRange(1, 1, 200, 12).setNumberFormat('@');
+  ws.getRange(1, 1, 200, 13).setNumberFormat('@');
 
-  var NUM_COLS = 12;
+  var NUM_COLS = 13;
 
   // Title
   ws.getRange(1, 1, 1, NUM_COLS).merge()
@@ -419,7 +412,7 @@ function writeAnalystTab(ss, data) {
   // Headers — no Date column
   var headers = ['Firm', 'Analyst', 'Rating', 'Price\nTarget',
                  'Q2\'26E', 'Q3\'26E', 'Q4\'26E', 'FY\'26E', 'FY\'27E',
-                 'FY\'26\nGrowth', 'FY\'27\nGrowth', ''];
+                 'FY\'26\nGrowth\n(ex. $599M)', 'FY\'26\nGrowth\n(incl. $599M)', 'FY\'27\nGrowth', ''];
   var hRange = ws.getRange(2, 1, 1, NUM_COLS);
   hRange.setValues([headers]);
   hRange.setBackground(C.navy).setFontColor(C.navyText)
@@ -432,7 +425,7 @@ function writeAnalystTab(ss, data) {
     if (a.isSummary) {
       var vals = [a.label, '', '', fmtPT(a.pt),
                   fmtRev(a.q2), fmtRev(a.q3), fmtRev(a.q4),
-                  fmtRev(a.fy26), fmtRev(a.fy27), '', '', ''];
+                  fmtRev(a.fy26), fmtRev(a.fy27), '', '', '', ''];
       var r = ws.getRange(rowNum, 1, 1, NUM_COLS);
       r.setValues([vals]).setBackground(C.totalBg).setFontWeight('bold');
       ws.getRange(rowNum, 1, 1, NUM_COLS).setBorder(
@@ -447,13 +440,13 @@ function writeAnalystTab(ss, data) {
       var vals = [a.firm || '', a.analyst || '', a.rating || '', fmtPT(a.pt),
                   fmtRev(a.q2), fmtRev(a.q3), fmtRev(a.q4),
                   fmtRev(a.fy26), fmtRev(a.fy27),
-                  fmtGrowth(a.growth26), fmtGrowth(a.growth27), ''];
+                  fmtGrowth(a.growth26exSett), fmtGrowth(a.growth26inclSett), fmtGrowth(a.growth27), ''];
       var r = ws.getRange(rowNum, 1, 1, NUM_COLS);
       r.setValues([vals]).setBackground(bg);
       ws.getRange(rowNum, 3).setBackground(ratingColor).setHorizontalAlignment('center');
     }
 
-    ws.getRange(rowNum, 4, 1, 8).setHorizontalAlignment('right');
+    ws.getRange(rowNum, 4, 1, 9).setHorizontalAlignment('right');
     ws.setRowHeight(rowNum, 18);
     rowNum++;
   });
@@ -474,9 +467,10 @@ function writeAnalystTab(ss, data) {
   ws.setColumnWidth(3, 80);   // Rating
   ws.setColumnWidth(4, 60);   // PT
   for (var c = 5; c <= 9; c++) ws.setColumnWidth(c, 72);
-  ws.setColumnWidth(10, 72);
-  ws.setColumnWidth(11, 72);
-  ws.setColumnWidth(12, 20);
+  ws.setColumnWidth(10, 90);  // FY26 Growth ex-settlement
+  ws.setColumnWidth(11, 90);  // FY26 Growth incl-settlement
+  ws.setColumnWidth(12, 72);  // FY27 Growth
+  ws.setColumnWidth(13, 20);
 
   // Freeze rows only (no column freeze — conflicts with merged title row)
   ws.setFrozenRows(2);
@@ -588,7 +582,7 @@ function sendUpdateEmail(data) {
   // ── Analyst Detail table ──
   var analystHeaderCells = ['Firm','Analyst','Rating','Price Target',
                             "Q2'26E","Q3'26E","Q4'26E","FY'26E","FY'27E",
-                            "FY'26 Growth","FY'27 Growth"]
+                            "FY'26 Growth (ex. $599M)","FY'26 Growth (incl. $599M)","FY'27 Growth"]
     .map(function(h, i) {
       var align = i >= 3 ? 'text-align:right;' : 'text-align:left;';
       return '<th style="padding:4px 10px;' + align + 'background:#1B3A6B;color:#fff;white-space:nowrap;">' + h + '</th>';
@@ -607,6 +601,7 @@ function sendUpdateEmail(data) {
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.q4) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy26) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy27) + '</td>',
+        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
         '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
         '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
       ];
@@ -628,7 +623,8 @@ function sendUpdateEmail(data) {
         td(fmtRev(a.q4), 'text-align:right;'),
         td(fmtRev(a.fy26), 'text-align:right;'),
         td(fmtRev(a.fy27), 'text-align:right;'),
-        td(fmtGrowth(a.growth26), 'text-align:right;'),
+        td(fmtGrowth(a.growth26exSett), 'text-align:right;'),
+        td(fmtGrowth(a.growth26inclSett), 'text-align:right;'),
         td(fmtGrowth(a.growth27), 'text-align:right;'),
       ];
       analystBodyRows += '<tr>' + cells.join('') + '</tr>';
