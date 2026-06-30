@@ -75,7 +75,6 @@ function triggerEmail() {
     DriveApp.getFileById(tempSS.getId()).setTrashed(true);
   }
 }
-}
 
 // ── Drive helpers ─────────────────────────────────────────────────────────────
 
