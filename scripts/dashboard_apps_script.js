@@ -218,7 +218,8 @@ function extractData(ss) {
       if (colLabel === 'Mean' || colLabel === 'Median') {
         analysts.push({
           isSummary: true, label: colLabel,
-          pt: r[8], q2: r[10], q3: r[11], q4: r[12], fy26: r[13], fy27: r[14]
+          pt: r[8], q2: r[10], q3: r[11], q4: r[12], fy26: r[13], fy27: r[14],
+          growth26exSett: r[15], growth26inclSett: r[16], growth27: r[18]
         });
         continue;
       }
@@ -425,7 +426,8 @@ function writeAnalystTab(ss, data) {
     if (a.isSummary) {
       var vals = [a.label, '', '', fmtPT(a.pt),
                   fmtRev(a.q2), fmtRev(a.q3), fmtRev(a.q4),
-                  fmtRev(a.fy26), fmtRev(a.fy27), '', '', '', ''];
+                  fmtRev(a.fy26), fmtRev(a.fy27),
+                  fmtGrowth(a.growth26exSett), fmtGrowth(a.growth26inclSett), fmtGrowth(a.growth27), ''];
       var r = ws.getRange(rowNum, 1, 1, NUM_COLS);
       r.setValues([vals]).setBackground(C.totalBg).setFontWeight('bold');
       ws.getRange(rowNum, 1, 1, NUM_COLS).setBorder(
@@ -601,9 +603,9 @@ function sendUpdateEmail(data) {
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.q4) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy26) + '</td>',
         '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtRev(a.fy27) + '</td>',
-        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
-        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
-        '<td style="padding:4px 8px;background:#EBF3FB;border-top:2px solid #1B3A6B;"></td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtGrowth(a.growth26exSett) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtGrowth(a.growth26inclSett) + '</td>',
+        '<td style="padding:4px 8px;text-align:right;font-weight:bold;background:#EBF3FB;border-top:2px solid #1B3A6B;">' + fmtGrowth(a.growth27) + '</td>',
       ];
       analystBodyRows += '<tr>' + cells.join('') + '</tr>';
     } else {
